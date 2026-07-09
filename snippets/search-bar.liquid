@@ -1,0 +1,110 @@
+{% comment %}
+  Snippet: search-bar
+  Version: Dawn Edition
+  Compatible with: Shopify Dawn Theme (v14+)
+  Author: John Venedick Natividad
+
+  Features:
+  - Predictive Search API (Shopify native)
+  - Debounced input (300ms)
+  - Keyboard navigation (↑ ↓ Enter Escape)
+  - Loading state per search
+  - Empty + error states
+  - Recent searches (localStorage)
+  - Screen reader announcements
+{% endcomment %}
+
+<predictive-search
+  class="search-bar"
+  id="SearchBar-{{ section.id }}"
+  data-loading-text="{{ 'accessibility.loading' | t | default: 'Loading...' }}"
+  data-results-limit="{{ section.settings.search_results_limit | default: 6 }}"
+  role="combobox"
+  aria-haspopup="listbox"
+  aria-expanded="false"
+  aria-owns="SearchResults-{{ section.id }}"
+>
+
+  <div class="search-bar__form-wrap">
+    <form
+      action="{{ routes.search_url }}"
+      method="get"
+      class="search-bar__form"
+      role="search"
+      novalidate
+    >
+      <input type="hidden" name="type" value="product">
+      <input type="hidden" name="options[prefix]" value="last">
+
+      <div class="search-bar__input-wrap field">
+        <input
+          id="SearchInput-{{ section.id }}"
+          class="search-bar__input field__input"
+          type="search"
+          name="q"
+          value="{{ search.terms | escape }}"
+          placeholder="{{ section.settings.search_placeholder | default: 'Search products...' | escape }}"
+          aria-label="{{ section.settings.search_placeholder | default: 'Search products' | escape }}"
+          aria-autocomplete="list"
+          aria-controls="SearchResults-{{ section.id }}"
+          aria-activedescendant=""
+          autocomplete="off"
+          spellcheck="false"
+          role="combobox"
+        >
+
+        {%- comment %} Search Icon {%- endcomment %}
+        <button
+          type="submit"
+          class="search-bar__submit"
+          aria-label="{{ 'general.search.search' | t | default: 'Search' }}"
+        >
+          {%- render 'icon-search' -%}
+        </button>
+
+        {%- comment %} Clear Button {%- endcomment %}
+        <button
+          type="button"
+          class="search-bar__clear hidden"
+          id="SearchClear-{{ section.id }}"
+          aria-label="{{ 'general.search.clear' | t | default: 'Clear search' }}"
+        >
+          {%- render 'icon-close' -%}
+        </button>
+
+        {%- comment %} Loading Spinner {%- endcomment %}
+        <div
+          class="search-bar__spinner hidden"
+          id="SearchSpinner-{{ section.id }}"
+          aria-hidden="true"
+        >
+          <div class="loading-overlay__spinner">
+            <svg aria-hidden="true" focusable="false" class="spinner" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg">
+              <circle class="path" fill="none" stroke-width="6" cx="33" cy="33" r="30"></circle>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {%- comment %} Results Dropdown {%- endcomment %}
+  <div
+    class="search-bar__results"
+    id="SearchResults-{{ section.id }}"
+    role="listbox"
+    aria-label="{{ 'general.search.results' | t | default: 'Search results' }}"
+    tabindex="-1"
+  >
+    {%- comment %} Results injected by JS {%- endcomment %}
+  </div>
+
+  {%- comment %} Screen reader live region {%- endcomment %}
+  <p
+    class="visually-hidden"
+    id="SearchAnnounce-{{ section.id }}"
+    aria-live="polite"
+    aria-atomic="true"
+  ></p>
+
+</predictive-search>

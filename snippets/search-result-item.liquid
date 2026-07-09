@@ -1,0 +1,110 @@
+{% comment %}
+  Snippet: search-result-item
+  Version: Dawn Edition
+  Compatible with: Shopify Dawn Theme (v14+)
+  Author: John Venedick Natividad
+
+  Renders a single product card in the filter grid.
+  Uses Dawn's card, price, and badge component CSS.
+
+  Params:
+    product   {Product} — Shopify product object
+    section   {Section} — Section object for settings
+    lazy_load {Boolean} — Whether to lazy load image
+{% endcomment %}
+
+{%- assign on_sale = false -%}
+{%- if product.compare_at_price > product.price -%}
+  {%- assign on_sale = true -%}
+{%- endif -%}
+
+<div class="product-card-wrapper card-wrapper">
+  <div class="card card--standard card--media color-{{ section.settings.color_scheme }}">
+
+    {%- comment %} Image {%- endcomment %}
+    <div
+      class="card__inner ratio"
+      style="--ratio-percent: 100%;"
+    >
+      <div class="card__media">
+        <div class="media media--transparent media--hover-effect">
+          <a
+            href="{{ product.url }}"
+            aria-label="{{ product.title | escape }}"
+            tabindex="-1"
+          >
+            {%- if product.featured_media -%}
+              {{
+                product.featured_media
+                | image_url: width: 533
+                | image_tag:
+                  loading: lazy_load | default: 'lazy',
+                  class: 'motion-reduce',
+                  widths: '165, 360, 533',
+                  sizes: '(min-width: 990px) 25vw, (min-width: 750px) 33vw, 50vw',
+                  alt: product.featured_media.alt | escape
+              }}
+              {%- if product.media[1] != nil -%}
+                {{
+                  product.media[1]
+                  | image_url: width: 533
+                  | image_tag:
+                    loading: 'lazy',
+                    class: 'motion-reduce card__image--secondary',
+                    widths: '165, 360, 533',
+                    sizes: '(min-width: 990px) 25vw, (min-width: 750px) 33vw, 50vw',
+                    alt: product.media[1].alt | escape
+                }}
+              {%- endif -%}
+            {%- else -%}
+              {{ 'product-1' | placeholder_svg_tag: 'placeholder-svg' }}
+            {%- endif -%}
+          </a>
+        </div>
+      </div>
+
+      {%- comment %} Badges {%- endcomment %}
+      <div class="card__badge bottom left">
+        {%- if product.available == false -%}
+          <span class="badge badge--bottom-left color-{{ settings.sold_out_badge_color_scheme }}">
+            {{ 'products.product.sold_out' | t }}
+          </span>
+        {%- elsif on_sale -%}
+          <span class="badge badge--bottom-left color-{{ settings.sale_badge_color_scheme }}">
+            {{ 'products.product.on_sale' | t }}
+          </span>
+        {%- endif -%}
+      </div>
+    </div>
+
+    {%- comment %} Card Content {%- endcomment %}
+    <div class="card__content">
+      <div class="card__information">
+
+        <h3 class="card__heading">
+          <a href="{{ product.url }}" class="full-unstyled-link">
+            {{ product.title | escape }}
+          </a>
+        </h3>
+
+        <div class="card-information">
+          <div class="price {% if on_sale %}price--on-sale{% endif %}">
+            <dl>
+              {%- if on_sale -%}
+                <dt class="visually-hidden">{{ 'products.product.price.sale_price' | t }}</dt>
+                <dd class="price__sale">{{ product.price | money }}</dd>
+                <dt class="visually-hidden">{{ 'products.product.price.regular_price' | t }}</dt>
+                <dd><s class="price__compare">{{ product.compare_at_price | money }}</s></dd>
+              {%- else -%}
+                <dt class="visually-hidden">{{ 'products.product.price.regular_price' | t }}</dt>
+                <dd class="price__regular">{{ product.price | money }}</dd>
+              {%- endif -%}
+            </dl>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>

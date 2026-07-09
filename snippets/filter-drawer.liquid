@@ -1,0 +1,60 @@
+{% comment %}
+  Snippet: filter-drawer
+  Version: Dawn Edition
+  Compatible with: Shopify Dawn Theme (v14+)
+  Author: John Venedick Natividad
+
+  Mobile slide-in filter drawer
+  Uses Dawn's dialog/drawer pattern with focus trap
+{% endcomment %}
+
+<div
+  id="FilterDrawer"
+  class="filter-drawer color-{{ section.settings.color_scheme }} gradient"
+  aria-modal="true"
+  aria-label="{{ 'sections.search_filter.filters_label' | t | default: 'Filters' }}"
+  role="dialog"
+  aria-hidden="true"
+>
+  <div class="filter-drawer__overlay" id="FilterDrawerOverlay"></div>
+
+  <div class="filter-drawer__panel" id="FilterDrawerPanel" tabindex="-1">
+
+    <div class="filter-drawer__header">
+      <h2 class="filter-drawer__heading h3">
+        {{ 'sections.search_filter.filters_label' | t | default: 'Filters' }}
+      </h2>
+      <button
+        class="filter-drawer__close button button--tertiary"
+        type="button"
+        aria-label="{{ 'accessibility.close' | t | default: 'Close' }}"
+        aria-controls="FilterDrawer"
+      >
+        {%- render 'icon-close' -%}
+      </button>
+    </div>
+
+    <div class="filter-drawer__body">
+      {%- render 'filter-facets', section: section, results: collection -%}
+    </div>
+
+    <div class="filter-drawer__footer">
+      <button
+        class="filter-drawer__apply button button--primary button--full-width"
+        type="button"
+        aria-controls="FilterDrawer"
+      >
+        {{ 'sections.search_filter.apply_filters' | t | default: 'View results' }}
+        <span class="filter-drawer__count" id="FilterDrawerCount"></span>
+      </button>
+      <button
+        class="filter-drawer__clear button button--secondary button--full-width"
+        type="button"
+        data-filter-url="{{ collection.url }}"
+      >
+        {{ 'sections.search_filter.clear_all' | t | default: 'Clear all' }}
+      </button>
+    </div>
+
+  </div>
+</div>

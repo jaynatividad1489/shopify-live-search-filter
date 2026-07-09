@@ -1,0 +1,214 @@
+{% comment %}
+  Snippet: filter-facets
+  Version: Dawn Edition
+  Compatible with: Shopify Dawn Theme (v14+)
+  Author: John Venedick Natividad
+
+  Features:
+  - Multi-select checkboxes per facet
+  - Price range slider (dual handle)
+  - Swatch support for color filters
+  - Show more / show less per filter group
+  - Accessible: ARIA, keyboard, focus-visible
+  - Works in sidebar, top bar, or drawer
+{% endcomment %}
+
+{%- assign results = results | default: collection -%}
+
+{%- if results.filters != empty -%}
+  <form
+    id="FacetFiltersForm"
+    class="facets"
+    data-section-id="{{ section.id }}"
+  >
+
+    {%- for filter in results.filters -%}
+      <details
+        class="facets__group"
+        id="FacetGroup-{{ forloop.index }}"
+        {% if forloop.index <= 3 %}open{% endif %}
+      >
+        <summary class="facets__summary">
+          <span class="facets__summary-label">{{ filter.label }}</span>
+          {%- if filter.active_values.size > 0 -%}
+            <span class="facets__summary-count">({{ filter.active_values.size }})</span>
+          {%- endif -%}
+          {%- render 'icon-caret' -%}
+        </summary>
+
+        <div class="facets__body">
+
+          {%- if filter.type == 'boolean' or filter.type == 'list' -%}
+            <ul class="facets__list" role="list">
+              {%- assign show_more_limit = 8 -%}
+              {%- for value in filter.values -%}
+                {%- if forloop.index <= show_more_limit or filter.active_values contains value -%}
+                  <li class="facets__item">
+                    <label
+                      class="facets__label {% if value.count == 0 and value.active == false %}facets__label--disabled{% endif %}"
+                      for="Filter-{{ filter.param_name }}-{{ forloop.index }}"
+                    >
+                      <input
+                        class="facets__checkbox"
+                        type="checkbox"
+                        name="{{ value.param_name }}"
+                        value="{{ value.value }}"
+                        id="Filter-{{ filter.param_name }}-{{ forloop.index }}"
+                        {% if value.active %}checked{% endif %}
+                        {% if value.count == 0 and value.active == false %}disabled{% endif %}
+                      >
+
+                      {%- comment %} Color Swatch {%- endcomment %}
+                      {%- if filter.param_name contains 'color' or filter.param_name contains 'colour' -%}
+                        <span
+                          class="facets__swatch"
+                          style="background-color: {{ value.value | downcase | replace: ' ', '' }};"
+                          aria-hidden="true"
+                        ></span>
+                      {%- endif -%}
+
+                      <span class="facets__value-label">{{ value.label }}</span>
+                      <span class="facets__count">({{ value.count }})</span>
+                    </label>
+                  </li>
+                {%- elsif forloop.index == show_more_limit | plus: 1 -%}
+                  <li class="facets__item facets__item--show-more" id="FacetShowMore-{{ forloop.parentloop.index }}">
+                    <button
+                      class="facets__show-more link"
+                      type="button"
+                      aria-expanded="false"
+                      aria-controls="FacetMoreItems-{{ forloop.parentloop.index }}"
+                    >
+                      + {{ filter.values.size | minus: show_more_limit }} more
+                    </button>
+                    <ul
+                      class="facets__more-items hidden"
+                      id="FacetMoreItems-{{ forloop.parentloop.index }}"
+                      role="list"
+                    >
+                {%- endif -%}
+
+                {%- if forloop.index > show_more_limit -%}
+                  <li class="facets__item">
+                    <label
+                      class="facets__label {% if value.count == 0 and value.active == false %}facets__label--disabled{% endif %}"
+                      for="Filter-{{ filter.param_name }}-{{ forloop.index }}"
+                    >
+                      <input
+                        class="facets__checkbox"
+                        type="checkbox"
+                        name="{{ value.param_name }}"
+                        value="{{ value.value }}"
+                        id="Filter-{{ filter.param_name }}-{{ forloop.index }}"
+                        {% if value.active %}checked{% endif %}
+                        {% if value.count == 0 and value.active == false %}disabled{% endif %}
+                      >
+                      <span class="facets__value-label">{{ value.label }}</span>
+                      <span class="facets__count">({{ value.count }})</span>
+                    </label>
+                  </li>
+                  {%- if forloop.last -%}
+                    </ul>
+                    <button
+                      class="facets__show-less link hidden"
+                      type="button"
+                    >
+                      Show less
+                    </button>
+                  {%- endif -%}
+                {%- endif -%}
+
+              {%- endfor -%}
+            </ul>
+
+          {%- elsif filter.type == 'price_range' -%}
+            {%- assign price_min = filter.min_value.value | default: filter.range_min -%}
+            {%- assign price_max = filter.max_value.value | default: filter.range_max -%}
+
+            <div
+              class="facets__price-range"
+              data-min="{{ filter.range_min }}"
+              data-max="{{ filter.range_max }}"
+              id="PriceRange-{{ section.id }}"
+            >
+              {%- comment %} Range Track {%- endcomment %}
+              <div class="facets__price-slider" id="PriceSlider-{{ section.id }}">
+                <div class="facets__price-track">
+                  <div class="facets__price-fill" id="PriceFill-{{ section.id }}"></div>
+                </div>
+                <input
+                  class="facets__price-thumb facets__price-thumb--min"
+                  type="range"
+                  name="{{ filter.min_value.param_name }}"
+                  id="PriceMin-{{ section.id }}"
+                  min="{{ filter.range_min | divided_by: 100 }}"
+                  max="{{ filter.range_max | divided_by: 100 }}"
+                  value="{{ price_min | divided_by: 100 }}"
+                  step="1"
+                  aria-label="Minimum price"
+                  aria-valuemin="{{ filter.range_min | divided_by: 100 | money }}"
+                  aria-valuemax="{{ filter.range_max | divided_by: 100 | money }}"
+                  aria-valuenow="{{ price_min | divided_by: 100 }}"
+                >
+                <input
+                  class="facets__price-thumb facets__price-thumb--max"
+                  type="range"
+                  name="{{ filter.max_value.param_name }}"
+                  id="PriceMax-{{ section.id }}"
+                  min="{{ filter.range_min | divided_by: 100 }}"
+                  max="{{ filter.range_max | divided_by: 100 }}"
+                  value="{{ price_max | divided_by: 100 }}"
+                  step="1"
+                  aria-label="Maximum price"
+                  aria-valuemin="{{ filter.range_min | divided_by: 100 | money }}"
+                  aria-valuemax="{{ filter.range_max | divided_by: 100 | money }}"
+                  aria-valuenow="{{ price_max | divided_by: 100 }}"
+                >
+              </div>
+
+              {%- comment %} Price Inputs {%- endcomment %}
+              <div class="facets__price-inputs">
+                <div class="facets__price-input-wrap field">
+                  <span class="facets__price-currency">{{ cart.currency.symbol }}</span>
+                  <input
+                    class="facets__price-input field__input"
+                    type="number"
+                    name="{{ filter.min_value.param_name }}"
+                    id="PriceMinInput-{{ section.id }}"
+                    value="{{ price_min | divided_by: 100 | ceil }}"
+                    min="0"
+                    placeholder="{{ filter.range_min | divided_by: 100 | ceil }}"
+                    aria-label="{{ 'sections.search_filter.min_price' | t | default: 'Min price' }}"
+                  >
+                </div>
+                <span class="facets__price-separator" aria-hidden="true">–</span>
+                <div class="facets__price-input-wrap field">
+                  <span class="facets__price-currency">{{ cart.currency.symbol }}</span>
+                  <input
+                    class="facets__price-input field__input"
+                    type="number"
+                    name="{{ filter.max_value.param_name }}"
+                    id="PriceMaxInput-{{ section.id }}"
+                    value="{{ price_max | divided_by: 100 | ceil }}"
+                    min="0"
+                    placeholder="{{ filter.range_max | divided_by: 100 | ceil }}"
+                    aria-label="{{ 'sections.search_filter.max_price' | t | default: 'Max price' }}"
+                  >
+                </div>
+              </div>
+            </div>
+          {%- endif -%}
+
+        </div>
+      </details>
+    {%- endfor -%}
+
+    {%- comment %} Hidden submit for no-JS fallback {%- endcomment %}
+    <noscript>
+      <button type="submit" class="button button--primary">
+        {{ 'sections.search_filter.apply_filters' | t | default: 'Apply filters' }}
+      </button>
+    </noscript>
+
+  </form>
+{%- endif -%}

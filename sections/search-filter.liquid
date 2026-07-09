@@ -1,0 +1,412 @@
+{% comment %}
+  Section: Search & Filter
+  Version: Dawn Edition
+  Compatible with: Shopify Dawn Theme (v14+)
+  Author: John Venedick Natividad
+  GitHub: https://github.com/jaynatividad1489
+
+  Dawn conventions used:
+  - color_scheme setting
+  - page-width container
+  - Dawn heading size classes
+  - Dawn button classes
+  - Dawn's Shopify.routes.root for API calls
+  - customElements.define() Web Component pattern
+  - Section padding settings
+  - visually-hidden utility
+  - Dawn's filter/facet URL structure (?filter.p.m.*)
+  - Storefront Search API + Predictive Search API
+  - ARIA live regions for dynamic content
+
+  Features:
+  - Live predictive search (debounced 300ms)
+  - AJAX collection filtering (no page reload)
+  - Multi-select facets (color, size, type, vendor)
+  - Price range slider
+  - Sort by dropdown
+  - Active filter tags with remove
+  - Clear all filters
+  - URL sync (pushState)
+  - Product count updates
+  - Empty + loading states
+  - Mobile filter drawer
+  - Keyboard navigation
+{% endcomment %}
+
+{{ 'search-filter.css' | asset_url | stylesheet_tag }}
+
+{%- assign current_sort  = section.settings.default_sort -%}
+{%- assign products_per_page = section.settings.products_per_page -%}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+<div
+  class="search-filter color-{{ section.settings.color_scheme }} gradient"
+  id="SearchFilter-{{ section.id }}"
+  data-section-id="{{ section.id }}"
+>
+  <div class="search-filter__inner page-width section-{{ section.id }}-padding">
+
+    {%- comment %} ── SEARCH BAR ── {%- endcomment %}
+    {%- if section.settings.show_search_bar -%}
+      {%- render 'search-bar', section: section -%}
+    {%- endif -%}
+
+    {%- comment %} ── COLLECTION FILTER LAYOUT ── {%- endcomment %}
+    {%- if section.settings.show_collection_filter -%}
+      <div class="search-filter__layout" id="SearchFilterLayout">
+
+        {%- comment %} Sidebar / Facets {%- endcomment %}
+        {%- if section.settings.filter_position == 'sidebar' -%}
+          <aside
+            class="search-filter__sidebar"
+            id="SearchFilterSidebar"
+            aria-label="{{ 'sections.search_filter.filters_label' | t | default: 'Filters' }}"
+          >
+            {%- render 'filter-facets', section: section, results: collection -%}
+          </aside>
+        {%- endif -%}
+
+        {%- comment %} Main Content {%- endcomment %}
+        <div class="search-filter__main" id="SearchFilterMain">
+
+          {%- comment %} Toolbar: Sort + Filter Toggle + Count {%- endcomment %}
+          <div class="search-filter__toolbar">
+
+            {%- comment %} Active Filter Tags {%- endcomment %}
+            <div
+              class="search-filter__active-tags"
+              id="ActiveFilterTags"
+              aria-live="polite"
+            >
+              {%- if collection.filters.size > 0 -%}
+                {%- for filter in collection.filters -%}
+                  {%- for value in filter.active_values -%}
+                    <button
+                      class="search-filter__tag"
+                      type="button"
+                      data-filter-url="{{ value.url_to_remove }}"
+                      aria-label="{{ 'sections.search_filter.remove_filter' | t | default: 'Remove filter' }}: {{ value.label }}"
+                    >
+                      {{ value.label }}
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                  {%- endfor -%}
+                  {%- if filter.type == 'price_range' -%}
+                    {%- if filter.min_value.value != nil or filter.max_value.value != nil -%}
+                      <button
+                        class="search-filter__tag"
+                        type="button"
+                        data-filter-url="{{ filter.url_to_remove }}"
+                        aria-label="{{ 'sections.search_filter.remove_filter' | t | default: 'Remove filter' }}: Price"
+                      >
+                        {%- if filter.min_value.value -%}{{ filter.min_value.value | money }}{%- else -%}{{ filter.range_min | money }}{%- endif -%}
+                        –
+                        {%- if filter.max_value.value -%}{{ filter.max_value.value | money }}{%- else -%}{{ filter.range_max | money }}{%- endif -%}
+                        <span aria-hidden="true">✕</span>
+                      </button>
+                    {%- endif -%}
+                  {%- endif -%}
+                {%- endfor -%}
+
+                <button
+                  class="search-filter__clear-all button button--tertiary"
+                  type="button"
+                  data-filter-url="{{ collection.url }}"
+                  aria-label="{{ 'sections.search_filter.clear_all' | t | default: 'Clear all filters' }}"
+                >
+                  {{ 'sections.search_filter.clear_all' | t | default: 'Clear all' }}
+                </button>
+              {%- endif -%}
+            </div>
+
+            <div class="search-filter__toolbar-right">
+              {%- comment %} Product Count {%- endcomment %}
+              <p
+                class="search-filter__count"
+                id="SearchFilterCount"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {{ 'sections.search_filter.product_count' | t: count: collection.products_count | default: collection.products_count | append: ' products' }}
+              </p>
+
+              {%- comment %} Mobile Filter Toggle {%- endcomment %}
+              {%- if section.settings.filter_position == 'drawer' -%}
+                <button
+                  class="search-filter__drawer-toggle button button--secondary"
+                  type="button"
+                  aria-controls="FilterDrawer"
+                  aria-expanded="false"
+                  id="FilterDrawerToggle"
+                >
+                  {%- render 'icon-filter' -%}
+                  {{ 'sections.search_filter.filter_button' | t | default: 'Filter' }}
+                  {%- assign active_count = 0 -%}
+                  {%- for filter in collection.filters -%}
+                    {%- assign active_count = active_count | plus: filter.active_values.size -%}
+                  {%- endfor -%}
+                  {%- if active_count > 0 -%}
+                    <span class="search-filter__drawer-badge">{{ active_count }}</span>
+                  {%- endif -%}
+                </button>
+              {%- endif -%}
+
+              {%- comment %} Sort By {%- endcomment %}
+              {%- if section.settings.show_sort -%}
+                <div class="search-filter__sort">
+                  <label
+                    for="SortBy"
+                    class="search-filter__sort-label visually-hidden"
+                  >
+                    {{ 'sections.search_filter.sort_by' | t | default: 'Sort by' }}
+                  </label>
+                  <select
+                    id="SortBy"
+                    class="search-filter__sort-select"
+                    aria-describedby="a11y-refresh-page-message"
+                  >
+                    {%- assign sort_by = collection.sort_by | default: collection.default_sort_by -%}
+                    {%- for option in collection.sort_options -%}
+                      <option
+                        value="{{ option.value }}"
+                        {% if option.value == sort_by %}selected{% endif %}
+                      >
+                        {{ option.name }}
+                      </option>
+                    {%- endfor -%}
+                  </select>
+                </div>
+              {%- endif -%}
+            </div>
+          </div>
+
+          {%- comment %} Top Facets (horizontal) {%- endcomment %}
+          {%- if section.settings.filter_position == 'top' -%}
+            {%- render 'filter-facets', section: section, results: collection -%}
+          {%- endif -%}
+
+          {%- comment %} Product Grid {%- endcomment %}
+          <div
+            class="search-filter__grid"
+            id="SearchFilterGrid"
+            aria-live="polite"
+            aria-busy="false"
+          >
+            {%- paginate collection.products by products_per_page -%}
+              {%- if collection.products.size > 0 -%}
+                <ul
+                  class="
+                    product-grid
+                    grid
+                    grid--{{ section.settings.columns_desktop }}-col-desktop
+                    grid--2-col-tablet
+                    grid--{{ section.settings.columns_mobile }}-col-mobile
+                  "
+                  role="list"
+                >
+                  {%- for product in collection.products -%}
+                    <li class="grid__item">
+                      {%- render 'search-result-item',
+                        product: product,
+                        section: section,
+                        lazy_load: forloop.index > 4
+                      -%}
+                    </li>
+                  {%- endfor -%}
+                </ul>
+
+                {%- comment %} Pagination {%- endcomment %}
+                {%- if paginate.pages > 1 -%}
+                  <div class="search-filter__pagination" id="SearchFilterPagination">
+                    {{- paginate | default_pagination: anchor: '' -}}
+                  </div>
+                {%- endif -%}
+
+              {%- else -%}
+                {%- comment %} Empty State {%- endcomment %}
+                <div class="search-filter__empty" id="SearchFilterEmpty">
+                  <p class="search-filter__empty-title h3">
+                    {{ 'sections.search_filter.no_results' | t | default: 'No products found' }}
+                  </p>
+                  <p class="search-filter__empty-text">
+                    {{ 'sections.search_filter.no_results_text' | t | default: 'Try adjusting your filters or search term.' }}
+                  </p>
+                  {%- if collection.filters.size > 0 -%}
+                    <a href="{{ collection.url }}" class="button button--primary">
+                      {{ 'sections.search_filter.clear_all' | t | default: 'Clear all filters' }}
+                    </a>
+                  {%- endif -%}
+                </div>
+              {%- endif -%}
+            {%- endpaginate -%}
+          </div>
+
+        </div>
+        {%- comment %} END .search-filter__main {%- endcomment %}
+
+      </div>
+      {%- comment %} END .search-filter__layout {%- endcomment %}
+
+      {%- comment %} Mobile Filter Drawer {%- endcomment %}
+      {%- if section.settings.filter_position == 'drawer' -%}
+        {%- render 'filter-drawer', section: section, collection: collection -%}
+      {%- endif -%}
+
+    {%- endif -%}
+
+  </div>
+</div>
+
+<script src="{{ 'search-filter.js' | asset_url }}" defer="defer"></script>
+
+{% schema %}
+{
+  "name": "t:sections.search-filter.name",
+  "tag": "section",
+  "class": "section section-search-filter",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:sections.all.color_scheme.label",
+      "default": "scheme-1"
+    },
+    {
+      "type": "header",
+      "content": "t:sections.search-filter.settings.header_search.content"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_search_bar",
+      "label": "t:sections.search-filter.settings.show_search_bar.label",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "search_placeholder",
+      "label": "t:sections.search-filter.settings.search_placeholder.label",
+      "default": "Search products..."
+    },
+    {
+      "type": "range",
+      "id": "search_results_limit",
+      "min": 3,
+      "max": 10,
+      "step": 1,
+      "default": 6,
+      "label": "t:sections.search-filter.settings.search_results_limit.label"
+    },
+    {
+      "type": "header",
+      "content": "t:sections.search-filter.settings.header_collection.content"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_collection_filter",
+      "label": "t:sections.search-filter.settings.show_collection_filter.label",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "products_per_page",
+      "min": 8,
+      "max": 48,
+      "step": 4,
+      "default": 16,
+      "label": "t:sections.search-filter.settings.products_per_page.label"
+    },
+    {
+      "type": "select",
+      "id": "columns_desktop",
+      "label": "t:sections.search-filter.settings.columns_desktop.label",
+      "options": [
+        { "value": "2", "label": "2" },
+        { "value": "3", "label": "3" },
+        { "value": "4", "label": "4" }
+      ],
+      "default": "3"
+    },
+    {
+      "type": "select",
+      "id": "columns_mobile",
+      "label": "t:sections.search-filter.settings.columns_mobile.label",
+      "options": [
+        { "value": "1", "label": "1" },
+        { "value": "2", "label": "2" }
+      ],
+      "default": "2"
+    },
+    {
+      "type": "header",
+      "content": "t:sections.search-filter.settings.header_filter.content"
+    },
+    {
+      "type": "select",
+      "id": "filter_position",
+      "label": "t:sections.search-filter.settings.filter_position.label",
+      "options": [
+        { "value": "sidebar", "label": "Sidebar" },
+        { "value": "top",     "label": "Top (horizontal)" },
+        { "value": "drawer",  "label": "Drawer (mobile-first)" }
+      ],
+      "default": "sidebar"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_sort",
+      "label": "t:sections.search-filter.settings.show_sort.label",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "default_sort",
+      "label": "t:sections.search-filter.settings.default_sort.label",
+      "options": [
+        { "value": "manual",             "label": "Featured" },
+        { "value": "best-selling",       "label": "Best selling" },
+        { "value": "title-ascending",    "label": "A–Z" },
+        { "value": "title-descending",   "label": "Z–A" },
+        { "value": "price-ascending",    "label": "Price: Low to High" },
+        { "value": "price-descending",   "label": "Price: High to Low" },
+        { "value": "created-descending", "label": "Newest" }
+      ],
+      "default": "manual"
+    },
+    {
+      "type": "header",
+      "content": "t:sections.all.padding.section_padding_heading"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0, "max": 100, "step": 4, "unit": "px",
+      "label": "t:sections.all.padding.padding_top",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0, "max": 100, "step": 4, "unit": "px",
+      "label": "t:sections.all.padding.padding_bottom",
+      "default": 36
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:sections.search-filter.presets.name"
+    }
+  ]
+}
+{% endschema %}
